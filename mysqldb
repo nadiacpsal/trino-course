@@ -1,0 +1,188 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "clusterName": {
+      "type": "String",
+      "metadata": {
+        "description": "The name of the HDInsight cluster Gen2 to create"
+      }
+    },
+    "clusterPoolName": {
+      "type": "String",
+      "metadata": {
+        "description": "The name of the HDInsight cluster pool where the cluster to be created"
+      }
+    },
+    "workerNodeCount": {
+      "type": "String",
+      "metadata": {
+        "description": "Worker node count"
+      }
+    },
+    "mysqlDatabaseServer": {
+      "type": "String",
+      "metadata": {
+        "description": "Mysql metastore server name"
+      }
+    },
+    "mysqlDatabaseUserName": {
+      "type": "String",
+      "metadata": {
+        "description": "Mysql metastore database login username"
+      }
+    },
+    "mysqlsecretName": {
+      "type": "String",
+      "metadata": {
+        "description": "Keyvault secret which holds Hive metastore SQL database login password"
+      }
+    },
+    "hiveDBPasswordKeyVaultId": {
+      "type": "String",
+      "metadata": {
+        "description": "Resource Id of the keyvault which holds Hive metastore SQL database login password secret"
+      }
+    },
+    "hiveDBPasswordSecretName": {
+      "type": "String",
+      "metadata": {
+        "description": "Keyvault secret which holds Hive metastore SQL database login password"
+      }
+    },
+    "storageAccountEndpoint": {
+      "type": "String",
+      "metadata": {
+        "description": "Storage account endpoint"
+      }
+    },
+    "storageAccountContainer": {
+      "type": "String",
+      "metadata": {
+        "description": "Filesystem/container in the given storage"
+      }
+    },
+    "hiveCatalogName": {
+      "type": "String",
+      "metadata": {
+        "description": "Hive catalog name"
+      }
+    },
+    "hiveDatabaseServer": {
+      "type": "String",
+      "metadata": {
+        "description": "Hive metastore SQL server name"
+      }
+    },
+    "hiveDatabaseName": {
+      "type": "String",
+      "metadata": {
+        "description": "Hive metastore SQL database name"
+      }
+    },
+    "hiveDatabaseUserName": {
+      "type": "String",
+      "metadata": {
+        "description": "Hive metastore SQL database login username"
+      }
+    }
+  },
+  "variables": {
+    "clusterGen2ApiVersion": "2021-09-15-preview",
+    "intWorkerNodeCount": "[int(parameters('workerNodeCount'))]",
+    "fullClusterName": "[concat(parameters('clusterPoolName'), '/', parameters('clusterName'))]"
+  },
+  "resources": [
+    {
+      "type": "microsoft.hdinsight/clusterpools/clusters",
+      "apiVersion": "2021-09-15-preview",
+      "name": "[variables('fullClusterName')]",
+      "location": "eastus2",
+      "tags": {},
+      "properties": {
+        "clusterType": "Trino",
+        "computeProfile": {
+          "vmSize": "Standard_D16a_v4",
+          "count": 5
+        },
+        "clusterProfile": {
+          "stackVersion": "0.381.0-0.1",
+          "identityProfile": {
+            "msiResourceId": "/subscriptions/d66b1168-d835-4066-8c45-7d2ed713c082/resourcegroups/nadiagrp/providers/Microsoft.ManagedIdentity/userAssignedIdentities/hilotestnsMSI",
+            "msiClientId": "4e9a89cc-d85a-495f-a7f1-8762d6f28e0c",
+            "msiObjectId": "27e3fb8a-d284-4066-8609-569f52f03be3"
+          },
+          "authorizationProfile": {
+            "userIds": [
+              "0eeffc11-89a2-428b-92ec-37865e595117"
+            ]
+          },
+          "secretsProfile": {
+            "keyVaultResourceId": "/subscriptions/d66b1168-d835-4066-8c45-7d2ed713c082/resourceGroups/nadiagrp/providers/Microsoft.KeyVault/vaults/hilotestnsKeyVault",
+            "secrets": [
+              {
+                "referenceName": "hmssecret",
+                "type": "secret",
+                "keyVaultObjectName": "hmssecret"
+              },
+              {
+                "referenceName": "mysqlsecret",
+                "type": "secret",
+                "keyVaultObjectName": "mysqlsecret"
+              }
+            ]
+          },
+          "serviceConfigsProfiles": [
+            {
+              "serviceName": "trino",
+              "configs": [
+                {
+                  "component": "catalogs",
+                  "files": [
+                    {
+                      "fileName": "hive.properties",
+                      "values": {
+                        "connector.name": "hive",
+                        "hive.allow-drop-table": "true"
+                      }
+                    },
+                    {
+                      "fileName": "mysql.properties",
+                      "values": {
+                        "connector.name": "mysql",
+                        "connection-url": "[concat('jdbc:mysql://',parameters('mysqlDatabaseServer'), '.mysql.database.azure.com:3306?serverTimezone=UTC')]",
+                        "connection-user": "[parameters('mysqlDatabaseUserName')]",
+                        "connection-password": "[concat('${SECRET_REF:',parameters('mysqlsecretName'), '}')]"
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          ],
+          "logAnalyticsProfile": {
+            "enabled": false,
+            "applicationLogs": {
+              "stdOutEnabled": false,
+              "stdErrorEnabled": false
+            },
+            "metricsEnabled": false
+          },
+          "trinoProfile": {
+            "catalogOptions": {
+              "hive": [
+                {
+                  "catalogName": "[parameters('hiveCatalogName')]",
+                  "metastoreDbConnectionURL": "[concat('jdbc:sqlserver://',parameters('hiveDatabaseServer'), '.database.windows.net;database=', parameters('hiveDatabaseName'),';encrypt=true;trustServerCertificate=true;create=false;loginTimeout=30')]",
+                  "metastoreDbConnectionUserName": "[parameters('hiveDatabaseUserName')]",
+                  "metastoreDbConnectionPassword": "[concat('${SECRET_REF:',parameters('hiveDBPasswordSecretName'), '}')]",
+                  "metastoreWarehouseDir": "[concat('abfs://',parameters('storageAccountContainer'), '@', parameters('storageAccountEndpoint'), '/hive/warehouse')]"
+                }
+              ]
+            }
+          }
+        }
+      }
+    }
+  ]
+}
