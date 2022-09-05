@@ -14,10 +14,67 @@
         "description": "The name of the HDInsight cluster pool where the cluster to be created"
       }
     },
+    "ClusterVersion": {
+      "defaultValue": "0.381.0-0.1",
+      "allowedValues": [
+        "0.381.0-0.1",
+        "0.359.0-0.1"
+      ],
+      "type": "String"
+    },
     "workerNodeCount": {
+      "defaultValue": "5",
       "type": "String",
       "metadata": {
         "description": "Worker node count"
+      }
+    },
+    "currentUserObjectId": {
+      "type": "String",
+      "metadata": {
+        "description": "Object id of the logged in user"
+      }
+    },
+    "msiResourceId": {
+      "type": "String",
+      "metadata": {
+        "description": "User managed identity resource id"
+      }
+    },
+    "msiClientId": {
+      "type": "String",
+      "metadata": {
+        "description": "User managed identity client id"
+      }
+    },
+    "msiObjectId": {
+      "type": "String",
+      "metadata": {
+        "description": "User managed identity object id"
+      }
+    },
+    "isLogAnalyticsEnabled": {
+      "type": "Bool",
+      "metadata": {
+        "description": "Flag which enables Log Analytics for the cluster"
+      }
+    },
+    "isLogAnalyticsStdErrorEnabled": {
+      "type": "Bool",
+      "metadata": {
+        "description": "Flag which enables standard error logs ingestion to Log Analytics workspace"
+      }
+    },
+    "isLogAnalyticsStdOutEnabled": {
+      "type": "Bool",
+      "metadata": {
+        "description": "Flag which enables standard out logs ingestion to Log Analytics workspace"
+      }
+    },
+    "isLogAnalyticsMetricsEnabled": {
+      "type": "Bool",
+      "metadata": {
+        "description": "Flag which enables JMX metrics ingestion to Log Analytics workspace"
       }
     },
     "mysqlDatabaseServer": {
@@ -95,7 +152,7 @@
   "resources": [
     {
       "type": "microsoft.hdinsight/clusterpools/clusters",
-      "apiVersion": "2021-09-15-preview",
+      "apiVersion": "[variables('clusterGen2ApiVersion')]",
       "name": "[variables('fullClusterName')]",
       "location": "eastus2",
       "tags": {},
@@ -103,32 +160,30 @@
         "clusterType": "Trino",
         "computeProfile": {
           "vmSize": "Standard_D16a_v4",
-          "count": 5
+          "count": "[variables('intWorkerNodeCount')]"
         },
         "clusterProfile": {
-          "stackVersion": "0.381.0-0.1",
+          "stackVersion": "[parameters('clusterVersion')]",
           "identityProfile": {
-            "msiResourceId": "/subscriptions/d66b1168-d835-4066-8c45-7d2ed713c082/resourcegroups/nadiagrp/providers/Microsoft.ManagedIdentity/userAssignedIdentities/hilotestnsMSI",
-            "msiClientId": "4e9a89cc-d85a-495f-a7f1-8762d6f28e0c",
-            "msiObjectId": "27e3fb8a-d284-4066-8609-569f52f03be3"
+            "msiResourceId": "[parameters('msiResourceId')]",
+            "msiClientId": "[parameters('msiClientId')]",
+            "msiObjectId": "[parameters('msiObjectId')]"
           },
           "authorizationProfile": {
-            "userIds": [
-              "0eeffc11-89a2-428b-92ec-37865e595117"
-            ]
+            "userIds": "[array(parameters('currentUserObjectId'))]"
           },
           "secretsProfile": {
-            "keyVaultResourceId": "/subscriptions/d66b1168-d835-4066-8c45-7d2ed713c082/resourceGroups/nadiagrp/providers/Microsoft.KeyVault/vaults/hilotestnsKeyVault",
+            "keyVaultResourceId": "[parameters('hiveDBPasswordKeyVaultId')]",
             "secrets": [
               {
-                "referenceName": "hmssecret",
+                "referenceName": "[parameters('hiveDBPasswordSecretName')]",
                 "type": "secret",
-                "keyVaultObjectName": "hmssecret"
+                "keyVaultObjectName": "[parameters('hiveDBPasswordSecretName')]"
               },
               {
-                "referenceName": "mysqlsecret",
+                "referenceName": "[parameters('mysqlsecretName')]",
                 "type": "secret",
-                "keyVaultObjectName": "mysqlsecret"
+                "keyVaultObjectName": "[parameters('mysqlsecretName')]"
               }
             ]
           },
